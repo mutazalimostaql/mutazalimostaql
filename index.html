@@ -1,0 +1,520 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>معتز علي - مطور برمجيات وخبير تقني</title>
+  <!-- مكتبات CDN مستقرة -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.22.9/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://unpkg.com/three@0.134.0/build/three.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; overflow-x: hidden; font-family: 'Cairo', sans-serif; background: #f5f5f5; }
+    #three-canvas { position: fixed; top: 0; left: 0; z-index: -1; width: 100%; height: 100%; opacity: 0.7; }
+    .gradient-text { background: linear-gradient(90deg, #a855f7, #3b82f6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header-image { background: url('https://images.unsplash.com/photo-1620712943543-bcc4688e7485') center/cover; }
+    .card { transition: transform 0.3s ease, box-shadow 0.3s ease; }
+    .card:hover { transform: translateY(-10px) scale(1.05); box-shadow: 0 15px 30px rgba(0, 0, 0, 0.2); }
+    .tech-tag { display: inline-block; background: #e5e7eb; color: #1f2937; padding: 0.25rem 0.5rem; border-radius: 0.25rem; margin: 0.25rem; font-size: 0.875rem; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 20px; }
+    .section-container { background: #ffffff; border-radius: 1rem; padding: 2rem; box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1); margin-bottom: 2rem; }
+  </style>
+</head>
+<body class="text-gray-800">
+  <div id="root"></div>
+  <canvas id="three-canvas"></canvas>
+
+  <script type="text/babel">
+    const { useEffect, useRef, useState } = React;
+
+    // Three.js AI-inspired Background Animation
+    function initThreeJS() {
+      try {
+        if (!window.THREE) {
+          console.error("Three.js لم يتم تحميله بشكل صحيح. تحقق من اتصال الإنترنت أو CDN.");
+          return;
+        }
+        const canvas = document.getElementById('three-canvas');
+        if (!canvas) {
+          console.error("لم يتم العثور على عنصر canvas. تأكد من وجود <canvas id='three-canvas'> في HTML.");
+          return;
+        }
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // إنشاء جسيمات شبكة عصبية (تقليل العدد لتحسين الأداء)
+        const particlesCount = 500; // تقليل من 1000 إلى 500
+        const particlesGeometry = new THREE.BufferGeometry();
+        const posArray = new Float32Array(particlesCount * 3);
+        const velocities = new Float32Array(particlesCount * 3);
+        for (let i = 0; i < particlesCount * 3; i += 3) {
+          posArray[i] = (Math.random() - 0.5) * 100;
+          posArray[i + 1] = (Math.random() - 0.5) * 100;
+          posArray[i + 2] = (Math.random() - 0.5) * 100;
+          velocities[i] = (Math.random() - 0.5) * 0.01; // تقليل السرعة
+          velocities[i + 1] = (Math.random() - 0.5) * 0.01;
+          velocities[i + 2] = (Math.random() - 0.5) * 0.01;
+        }
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({ color: 0xa855f7, size: 0.2 });
+        const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particles);
+
+        // إنشاء خطوط الربط (تقليل العدد)
+        const lineMaterial = new THREE.LineBasicMaterial({ color: 0x3b82f6, opacity: 0.3, transparent: true });
+        const lines = [];
+        for (let i = 0; i < 50; i++) { // تقليل من 100 إلى 50
+          const line = new THREE.Line(new THREE.BufferGeometry(), lineMaterial);
+          lines.push(line);
+          scene.add(line);
+        }
+
+        camera.position.z = 50;
+        function animate() {
+          requestAnimationFrame(animate);
+          particles.rotation.y += 0.001; // تقليل سرعة الدوران
+          const positions = particlesGeometry.attributes.position.array;
+          for (let i = 0; i < particlesCount * 3; i += 3) {
+            positions[i] += velocities[i];
+            positions[i + 1] += velocities[i + 1];
+            positions[i + 2] += velocities[i + 2];
+            if (Math.abs(positions[i]) > 50) velocities[i] *= -1;
+            if (Math.abs(positions[i + 1]) > 50) velocities[i + 1] *= -1;
+            if (Math.abs(positions[i + 2]) > 50) velocities[i + 2] *= -1;
+          }
+          particlesGeometry.attributes.position.needsUpdate = true;
+
+          // تحديث الخطوط
+          for (let i = 0; i < lines.length; i++) {
+            const idx1 = Math.floor(Math.random() * particlesCount) * 3;
+            const idx2 = Math.floor(Math.random() * particlesCount) * 3;
+            const positions = new Float32Array([
+              posArray[idx1], posArray[idx1 + 1], posArray[idx1 + 2],
+              posArray[idx2], posArray[idx2 + 1], posArray[idx2 + 2]
+            ]);
+            lines[i].geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            lines[i].geometry.attributes.position.needsUpdate = true;
+          }
+
+          renderer.render(scene, camera);
+        }
+        animate();
+
+        window.addEventListener('resize', () => {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+      } catch (error) {
+        console.error("خطأ في تهيئة Three.js:", error);
+      }
+    }
+
+    // Header Component
+    function Header() {
+      const headerRef = useRef(null);
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(headerRef.current, { y: -100, opacity: 0, duration: 1, ease: 'power3.out' });
+        }
+      }, []);
+      return (
+        <header ref={headerRef} className="header-image h-screen flex items-center justify-center text-center">
+          <div className="bg-white bg-opacity-80 p-8 rounded-lg shadow-lg">
+            <h1 className="text-4xl md:text-5xl font-bold gradient-text">معتز علي</h1>
+            <p className="text-xl md:text-2xl mt-4">مطور برمجيات، خبير تقني، ومبدع حلول رقمية</p>
+            <a href="#about" className="mt-6 inline-block bg-gradient-to-r from-purple-500 to-blue-500 text-white py-3 px-6 rounded-full hover:scale-105 transition-transform">استكشف خبراتي</a>
+          </div>
+        </header>
+      );
+    }
+
+    // About Component
+    function About() {
+      const aboutRef = useRef(null);
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(aboutRef.current.children, {
+            opacity: 0,
+            y: 50,
+            stagger: 0.2,
+            duration: 0.8,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: aboutRef.current, start: 'top 80%' }
+          });
+        }
+      }, []);
+      return (
+        <section id="about" className="py-16">
+          <div className="container">
+            <div className="section-container">
+              <h2 className="text-3xl md:text-4xl font-bold text-center gradient-text">من أنا؟</h2>
+              <p className="mt-6 text-base md:text-lg text-center">
+                أنا معتز علي، مطور برمجيات وخبير تقني بخبرة تزيد عن 10 سنوات. أتقن لغات البرمجة مثل JavaScript، TypeScript، Python، PHP، Dart، C#، C++، وJava، وأعمل بأحدث الأطر مثل React، Laravel، Flutter، و.NET. أقدم حلولاً مبتكرة في تطوير الويب، تطبيقات الهاتف، برامج الحاسوب، المونتاج باستخدام Pro Tools وAdobe Audition، تصميم الجرافيك، الحملات الإعلانية عبر YouTube وLinkedIn، وكتابة البحوث العلمية. هدفي هو تقديم منتجات رقمية استثنائية تلبي احتياجات العملاء بدقة وإبداع.
+              </p>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // Technologies Component
+    function Technologies() {
+      const techRef = useRef(null);
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(techRef.current.children, {
+            opacity: 0,
+            scale: 0.9,
+            stagger: 0.2,
+            duration: 0.8,
+            ease: 'back.out(1.7)',
+            scrollTrigger: { trigger: techRef.current, start: 'top 80%' }
+          });
+        }
+      }, []);
+      return (
+        <section id="technologies" className="py-16 bg-gray-100">
+          <div className="container">
+            <div className="section-container">
+              <h2 className="text-3xl md:text-4xl font-bold text-center gradient-text">التقنيات المستخدمة</h2>
+              <div className="mt-8">
+                <h3 className="text-xl md:text-2xl font-semibold">لغات البرمجة:</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="tech-tag">JavaScript</span>
+                  <span className="tech-tag">TypeScript</span>
+                  <span className="tech-tag">Python</span>
+                  <span className="tech-tag">PHP</span>
+                  <span className="tech-tag">Dart</span>
+                  <span className="tech-tag">C#</span>
+                  <span className="tech-tag">C++</span>
+                  <span className="tech-tag">Java</span>
+                  <span className="tech-tag">SQL</span>
+                </div>
+                <h3 className="text-xl md:text-2xl font-semibold mt-6">أطر العمل والأدوات:</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="tech-tag">React</span>
+                  <span className="tech-tag">Laravel</span>
+                  <span className="tech-tag">Flutter</span>
+                  <span className="tech-tag">Node.js</span>
+                  <span className="tech-tag">.NET</span>
+                  <span className="tech-tag">Django</span>
+                  <span className="tech-tag">Vue.js</span>
+                  <span className="tech-tag">React Native</span>
+                  <span className="tech-tag">Electron</span>
+                  <span className="tech-tag">MongoDB</span>
+                  <span className="tech-tag">MySQL</span>
+                  <span className="tech-tag">Adobe Premiere</span>
+                  <span className="tech-tag">After Effects</span>
+                  <span className="tech-tag">Audacity</span>
+                  <span className="tech-tag">Pro Tools</span>
+                  <span className="tech-tag">Adobe Audition</span>
+                  <span className="tech-tag">Photoshop</span>
+                  <span className="tech-tag">Illustrator</span>
+                  <span className="tech-tag">Adobe XD</span>
+                  <span className="tech-tag">Google Ads</span>
+                  <span className="tech-tag">Facebook Ads</span>
+                  <span className="tech-tag">YouTube Ads</span>
+                  <span className="tech-tag">LinkedIn Ads</span>
+                  <span className="tech-tag">Instagram Ads</span>
+                  <span className="tech-tag">Twitter Ads</span>
+                  <span className="tech-tag">LaTeX</span>
+                  <span className="tech-tag">Microsoft Word</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // Gallery Component
+    function Gallery() {
+      const galleryRef = useRef(null);
+      const [activeTab, setActiveTab] = useState('desktop');
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(galleryRef.current.children, {
+            opacity: 0,
+            y: 50,
+            stagger: 0.2,
+            duration: 0.8,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: galleryRef.current, start: 'top 80%' }
+          });
+        }
+      }, [activeTab]);
+
+      const galleries = {
+        desktop: [
+          { 
+            title: 'نظام إدارة المخزون', 
+            desc: 'تطبيق سطح مكتب لإدارة المخزون باستخدام C# و.NET، يدعم Windows وMac مع تقارير ديناميكية وتكامل API.', 
+            tech: ['C#', '.NET', 'SQL', 'Windows', 'Mac']
+          },
+          { 
+            title: 'محرر نصوص برمجي', 
+            desc: 'تطبيق Electron لتحرير النصوص مع دعم لغات البرمجة، مدعوم بـJavaScript وTypeScript.', 
+            tech: ['JavaScript', 'TypeScript', 'Electron']
+          },
+          { 
+            title: 'أداة تحليل البيانات', 
+            desc: 'تطبيق لتحليل البيانات باستخدام C++ و.NET لمعالجة كميات كبيرة من البيانات بسرعة عالية.', 
+            tech: ['C++', '.NET', 'SQL']
+          }
+        ],
+        mobile: [
+          { 
+            title: 'تطبيق التسوق الإلكتروني', 
+            desc: 'تطبيق Flutter للتسوق عبر الإنترنت مع واجهة مستخدم جذابة ودعم الدفع الإلكتروني، مكتوب بلغة Dart.', 
+            tech: ['Dart', 'Flutter', 'Firebase']
+          },
+          { 
+            title: 'تطبيق إدارة مالية', 
+            desc: 'تطبيق React Native لإدارة الميزانيات والمعاملات المالية مع إحصائيات دقيقة، مدعوم بـJavaScript وTypeScript.', 
+            tech: ['JavaScript', 'TypeScript', 'React Native']
+          },
+          { 
+            title: 'تطبيق التعلم التفاعلي', 
+            desc: 'تطبيق تعليمي باستخدام Flutter يوفر دروسًا تفاعلية واختبارات، مع تكامل قواعد بيانات MongoDB.', 
+            tech: ['Dart', 'Flutter', 'MongoDB']
+          }
+        ],
+        web: [
+          { 
+            title: 'منصة التجارة الإلكترونية', 
+            desc: 'موقع ويب ديناميكي باستخدام React وLaravel مع دعم الدفع عبر الإنترنت، مدعوم بـJavaScript وPHP.', 
+            tech: ['JavaScript', 'PHP', 'React', 'Laravel', 'MySQL']
+          },
+          { 
+            title: 'نظام إدارة المحتوى', 
+            desc: 'منصة CMS مخصصة باستخدام Django وVue.js لإدارة المحتوى بكفاءة، مكتوبة بلغة Python وJavaScript.', 
+            tech: ['Python', 'JavaScript', 'Django', 'Vue.js']
+          },
+          { 
+            title: 'لوحة تحكم الأعمال', 
+            desc: 'تطبيق ويب لتحليل البيانات باستخدام Next.js وNode.js مع GraphQL، مدعوم بـTypeScript.', 
+            tech: ['TypeScript', 'Next.js', 'Node.js', 'GraphQL']
+          }
+        ],
+        multimedia: [
+          { 
+            title: 'فيديو دعائي لشركة تقنية', 
+            desc: 'مونتاج فيديو احترافي باستخدام Adobe Premiere وAfter Effects مع هندسة صوتية عبر Pro Tools وAdobe Audition.', 
+            tech: ['Adobe Premiere', 'After Effects', 'Pro Tools', 'Adobe Audition']
+          },
+          { 
+            title: 'إعلان تسويقي تفاعلي', 
+            desc: 'إنتاج إعلان فيديو قصير باستخدام Adobe After Effects وPro Tools مع صوتيات عالية الجودة.', 
+            tech: ['Adobe After Effects', 'Pro Tools', 'Adobe Audition']
+          }
+        ],
+        design: [
+          { 
+            title: 'تصميم هوية بصرية', 
+            desc: 'تصميم شعار ومواد تسويقية لشركة ناشئة باستخدام Adobe Photoshop وIllustrator.', 
+            tech: ['Adobe Photoshop', 'Adobe Illustrator']
+          },
+          { 
+            title: 'واجهة مستخدم لتطبيق', 
+            desc: 'تصميم واجهة مستخدم حديثة باستخدام Adobe XD وIllustrator، مع التركيز على تجربة المستخدم.', 
+            tech: ['Adobe XD', 'Adobe Illustrator']
+          }
+        ],
+        ads: [
+          { 
+            title: 'حملة إعلانية لمتجر إلكتروني', 
+            desc: 'إدارة حملة إعلانية ممولة على Google Ads، YouTube Ads، وFacebook Ads لزيادة المبيعات بنسبة 40%.', 
+            tech: ['Google Ads', 'YouTube Ads', 'Facebook Ads']
+          },
+          { 
+            title: 'حملة تسويقية لتطبيق', 
+            desc: 'تصميم وإدارة حملة إعلانية على Instagram، Twitter، وLinkedIn Ads باستخدام أدوات تحليل متقدمة.', 
+            tech: ['Instagram Ads', 'Twitter Ads', 'LinkedIn Ads']
+          }
+        ],
+        research: [
+          { 
+            title: 'كتاب تقني عن الذكاء الاصطناعي', 
+            desc: 'تأليف كتاب علمي يشرح مفاهيم الذكاء الاصطناعي بأسلوب أكاديمي، مع أمثلة عملية.', 
+            tech: ['LaTeX', 'Microsoft Word']
+          },
+          { 
+            title: 'بحث عن الأمن السيبراني', 
+            desc: 'كتابة بحث علمي حول أحدث تقنيات الأمن السيبراني، مقدم لمؤتمر دولي.', 
+            tech: ['LaTeX', 'Microsoft Word']
+          }
+        ]
+      };
+
+      return (
+        <section id="gallery" className="py-16">
+          <div className="container">
+            <div className="section-container">
+              <h2 className="text-3xl md:text-4xl font-bold text-center gradient-text">معرض الأعمال</h2>
+              <div className="flex flex-wrap justify-center mt-6 gap-4">
+                {Object.keys(galleries).map((tab) => (
+                  <button
+                    key={tab}
+                    className={`py-2 px-4 rounded-full ${activeTab === tab ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' : 'bg-gray-200'}`}
+                    onClick={() => setActiveTab(tab)}
+                  >
+                    {tab === 'desktop' ? 'برامج الحاسوب' : 
+                     tab === 'mobile' ? 'تطبيقات الهاتف' : 
+                     tab === 'web' ? 'تطبيقات الويب' : 
+                     tab === 'multimedia' ? 'المونتاج والهندسة الصوتية' : 
+                     tab === 'design' ? 'تصميم الجرافيك' : 
+                     tab === 'ads' ? 'الإعلانات الممولة' : 
+                     'الكتب والبحوث'}
+                  </button>
+                ))}
+              </div>
+              <div ref={galleryRef} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+                {galleries[activeTab].map((item, index) => (
+                  <div key={index} className="bg-white p-6 rounded-lg card">
+                    <h3 className="text-xl md:text-2xl font-semibold gradient-text">{item.title}</h3>
+                    <p className="mt-4 text-sm md:text-base">{item.desc}</p>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      {item.tech.map((tech, i) => (
+                        <span key={i} className="tech-tag">{tech}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // Services Component
+    function Services() {
+      const servicesRef = useRef(null);
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(servicesRef.current.children, {
+            opacity: 0,
+            x: -50,
+            stagger: 0.2,
+            duration: 0.8,
+            ease: 'power3.out',
+            scrollTrigger: { trigger: servicesRef.current, start: 'top 80%' }
+          });
+        }
+      }, []);
+      return (
+        <section id="services" className="py-16 bg-gray-100">
+          <div className="container">
+            <div className="section-container">
+              <h2 className="text-3xl md:text-4xl font-bold text-center gradient-text">خدماتي</h2>
+              <ul className="mt-8 space-y-4 text-sm md:text-base">
+                <li>تطوير تطبيقات ويب متقدمة باستخدام JavaScript، PHP، وأطر مثل React، Laravel، وVue.js.</li>
+                <li>إنشاء تطبيقات هاتف باستخدام Dart وFlutter أو JavaScript وReact Native للأندرويد وiOS.</li>
+                <li>تصميم برامج حاسوب باستخدام C#، C++، و.NET أو JavaScript وElectron مع دعم APIs.</li>
+                <li>إنتاج مونتاج فيديو وهندسة صوتية احترافية باستخدام Adobe Premiere، After Effects، Pro Tools، وAdobe Audition.</li>
+                <li>تصميم جرافيك إبداعي باستخدام Adobe Photoshop، Illustrator، وXD للشعارات وواجهات المستخدم.</li>
+                <li>إدارة حملات إعلانية ممولة على Google Ads، YouTube Ads، Facebook Ads، LinkedIn Ads، وInstagram.</li>
+                <li>كتابة كتب وبحوث علمية تخصصية باستخدام LaTeX وMicrosoft Word بدقة أكاديمية.</li>
+                <li>خدمات الصيانة والتطوير المستمر لضمان أداء مثالي للمشاريع.</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    // Footer Component
+    function Footer() {
+      const footerRef = useRef(null);
+      useEffect(() => {
+        if (window.gsap) {
+          gsap.from(footerRef.current, { opacity: 0, y: 50, duration: 0.8, ease: 'power3.out', scrollTrigger: { trigger: footerRef.current, start: 'top 80%' } });
+        }
+      }, []);
+      return (
+        <footer ref={footerRef} className="py-10 bg-gradient-to-r from-purple-900 to-blue-900 text-white text-center">
+          <h3 className="text-xl md:text-2xl font-semibold gradient-text">هل لديك مشروع؟</h3>
+          <p className="mt-4 text-sm md:text-base">ابدأ مشروعك اليوم مع حلول تقنية مبتكرة!</p>
+          <p className="mt-6 text-xs md:text-sm">© 2025 معتز علي - جميع الحقوق محفوظة</p>
+        </footer>
+      );
+    }
+
+    // Main App Component
+    function App() {
+      useEffect(() => {
+        initThreeJS();
+      }, []);
+      return (
+        <div>
+          <Header />
+          <About />
+          <Technologies />
+          <Gallery />
+          <Services />
+          <Footer />
+        </div>
+      );
+    }
+
+    // Render the App
+    try {
+      if (window.React && window.ReactDOM) {
+        ReactDOM.render(<App />, document.getElementById('root'));
+      } else {
+        console.error("React أو ReactDOM لم يتم تحميلهما بشكل صحيح.");
+      }
+    } catch (error) {
+      console.error("خطأ في عرض التطبيق:", error);
+    }
+  </script>
+</body>
+</html>
